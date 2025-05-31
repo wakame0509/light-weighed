@@ -42,7 +42,14 @@ if st.button("✅ 勝率変動を計算"):
 
     # 結果表示
     st.success("✅ 計算完了！")
-    st.dataframe(result_df)
+    st.dataframe(result_df.style.format({
+        "FlopWinrate": "{:.2f}%",
+        "TurnWinrate": "{:.2f}%",
+        "RiverWinrate": "{:.2f}%",
+        "ShiftFlop": "{:+.2f}%",
+        "ShiftTurn": "{:+.2f}%",
+        "ShiftRiver": "{:+.2f}%"
+    }))
 
     # CSV保存
     csv = result_df.to_csv(index=False).encode("utf-8")
