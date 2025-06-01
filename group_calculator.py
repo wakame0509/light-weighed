@@ -8,18 +8,19 @@ def run_group_calculation(group_name, num_simulations, range_mode, six_player_mo
 
     for hand in hands:
         try:
-            # カード展開（例: "AKs" → "As", "Ks"）
-            if len(hand) == 2:
-                card1, card2 = hand
-                card1 += "s"
-                card2 += "s"
-            else:
-                # 例: "AKs" や "QJo" に対応
+            # 例: hand = "AKs" や "QJo" のような文字列を想定
+            if len(hand) == 3:
                 rank1, rank2, suited_flag = hand[0], hand[1], hand[2]
                 suit1 = "s"
                 suit2 = "s" if suited_flag == "s" else "h"
-                card1 = rank1 + suit1
-                card2 = rank2 + suit2
+            elif len(hand) == 2:
+                rank1, rank2 = hand[0], hand[1]
+                suit1, suit2 = "s", "h"
+            else:
+                raise ValueError(f"形式不明のハンド: {hand}")
+
+            card1 = rank1 + suit1
+            card2 = rank2 + suit2
 
             result = run_winrate_evolution(
                 p1_card1=card1,
