@@ -14,3 +14,10 @@ def remove_known_cards(deck, known_cards):
 def get_hand_group_dict():
     """ハンドグループの辞書を取得"""
     return hand_groups
+from hand_group_definitions import hand_groups
+
+def get_group_hands(group_name):
+    """
+    指定されたハンドグループ名に対応するハンド一覧を返す。
+    """
+    return hand_groups.get(group_name, [])
