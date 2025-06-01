@@ -1,7 +1,4 @@
-from utils import (
-    get_group_hands, get_hand_range_25, get_hand_range_30,
-    get_feature_flags
-)
+from utils import get_group_hands, get_hand_range_25, get_hand_range_30
 from calculate_winrate import run_winrate_evolution
 import pandas as pd
 import random
