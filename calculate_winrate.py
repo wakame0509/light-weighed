@@ -12,8 +12,27 @@ def generate_deck():
 def remove_known_cards(deck, known_cards):
     return [card for card in deck if card not in known_cards]
 
+def detect_features(p1_cards, board_cards):
+    """フロップやターンに落ちたカードの特徴を返す（例: オーバーカード, フラッシュドローなど）"""
+    features = []
+
+    p1_ranks = [c[0] for c in p1_cards]
+    board_ranks = [c[0] for c in board_cards]
+
+    max_p1_rank = max(p1_ranks, key=lambda r: "23456789TJQKA".index(r))
+    if any("23456789TJQKA".index(br) > "23456789TJQKA".index(max_p1_rank) for br in board_ranks):
+        features.append("Overcard")
+
+    suits = [c[1] for c in board_cards]
+    suit_counts = {s: suits.count(s) for s in set(suits)}
+    if max(suit_counts.values()) == 3:
+        features.append("FlushDraw")
+
+    return features or ["None"]
+
 def run_winrate_evolution(p1_card1, p1_card2, board, selected_range=None,
-                          extra_excluded=None, num_simulations=10000):
+                          extra_excluded=None, num_simulations=10000,
+                          return_features=False):
     known = [p1_card1, p1_card2] + board
     full_deck = generate_deck()
     deck = remove_known_cards(full_deck, known)
@@ -24,43 +43,86 @@ def run_winrate_evolution(p1_card1, p1_card2, board, selected_range=None,
     flop_wins = turn_wins = river_wins = 0
     flop_ties = turn_ties = river_ties = 0
 
+    feature_records = []
+
     for _ in range(num_simulations):
         sim_deck = deck.copy()
         random.shuffle(sim_deck)
 
-        # 相手のハンドをセット
+        # 相手ハンド
         opp_hand = random.choice(selected_range) if selected_range else [sim_deck.pop(), sim_deck.pop()]
 
         try:
-            # フロップ（3枚）
             flop = board + [sim_deck.pop() for _ in range(3 - len(board))]
-            p1_flop = [eval7.Card(p1_card1), eval7.Card(p1_card2)] + [eval7.Card(c) for c in flop]
-            p2_flop = [eval7.Card(c) for c in opp_hand] + [eval7.Card(c) for c in flop]
-            s1f, s2f = evaluate_hand(p1_flop), evaluate_hand(p2_flop)
+            turn = flop + [sim_deck.pop()]
+            river = turn + [sim_deck.pop()]
+
+            # フロップ評価
+            p1f = [eval7.Card(p1_card1), eval7.Card(p1_card2)] + [eval7.Card(c) for c in flop]
+            p2f = [eval7.Card(c) for c in opp_hand] + [eval7.Card(c) for c in flop]
+            s1f, s2f = evaluate_hand(p1f), evaluate_hand(p2f)
+
+            # ターン評価
+            p1t = [eval7.Card(p1_card1), eval7.Card(p1_card2)] + [eval7.Card(c) for c in turn]
+            p2t = [eval7.Card(c) for c in opp_hand] + [eval7.Card(c) for c in turn]
+            s1t, s2t = evaluate_hand(p1t), evaluate_hand(p2t)
+
+            # リバー評価
+            p1r = [eval7.Card(p1_card1), eval7.Card(p1_card2)] + [eval7.Card(c) for c in river]
+            p2r = [eval7.Card(c) for c in opp_hand] + [eval7.Card(c) for c in river]
+            s1r, s2r = evaluate_hand(p1r), evaluate_hand(p2r)
+
             if s1f > s2f:
                 flop_wins += 1
+                flop_shift = 1
             elif s1f == s2f:
                 flop_ties += 1
+                flop_shift = 0.5
+            else:
+                flop_shift = 0
 
-            # ターン（4枚目）
-            turn = flop + [sim_deck.pop()]
-            p1_turn = [eval7.Card(p1_card1), eval7.Card(p1_card2)] + [eval7.Card(c) for c in turn]
-            p2_turn = [eval7.Card(c) for c in opp_hand] + [eval7.Card(c) for c in turn]
-            s1t, s2t = evaluate_hand(p1_turn), evaluate_hand(p2_turn)
             if s1t > s2t:
                 turn_wins += 1
+                turn_shift = 1
             elif s1t == s2t:
                 turn_ties += 1
+                turn_shift = 0.5
+            else:
+                turn_shift = 0
 
-            # リバー（5枚目）
-            river = turn + [sim_deck.pop()]
-            p1_river = [eval7.Card(p1_card1), eval7.Card(p1_card2)] + [eval7.Card(c) for c in river]
-            p2_river = [eval7.Card(c) for c in opp_hand] + [eval7.Card(c) for c in river]
-            s1r, s2r = evaluate_hand(p1_river), evaluate_hand(p2_river)
             if s1r > s2r:
                 river_wins += 1
+                river_shift = 1
             elif s1r == s2r:
                 river_ties += 1
+                river_shift = 0.5
+            else:
+                river_shift = 0
+
+            if return_features:
+                flop_feats = detect_features([p1_card1, p1_card2], flop)
+                for feat in flop_feats:
+                    feature_records.append({
+                        "Feature": feat,
+                        "Street": "Flop",
+                        "Shift": flop_shift * 100
+                    })
+
+                turn_feats = detect_features([p1_card1, p1_card2], turn)
+                for feat in turn_feats:
+                    feature_records.append({
+                        "Feature": feat,
+                        "Street": "Turn",
+                        "Shift": turn_shift * 100
+                    })
+
+                river_feats = detect_features([p1_card1, p1_card2], river)
+                for feat in river_feats:
+                    feature_records.append({
+                        "Feature": feat,
+                        "Street": "River",
+                        "Shift": river_shift * 100
+                    })
 
         except Exception:
             continue
@@ -69,7 +131,7 @@ def run_winrate_evolution(p1_card1, p1_card2, board, selected_range=None,
     turn_winrate = (turn_wins + turn_ties / 2) / num_simulations * 100
     river_winrate = (river_wins + river_ties / 2) / num_simulations * 100
 
-    return {
+    result = {
         "Preflop": 0.0,
         "FlopWinrate": flop_winrate,
         "TurnWinrate": turn_winrate,
@@ -78,3 +140,7 @@ def run_winrate_evolution(p1_card1, p1_card2, board, selected_range=None,
         "ShiftTurn": turn_winrate - flop_winrate,
         "ShiftRiver": river_winrate - turn_winrate
     }
+
+    if return_features:
+        return result, feature_records
+    return result
