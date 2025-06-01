@@ -15,11 +15,15 @@ def run_group_calculation(group_name, num_simulations, range_mode, six_player_mo
     else:
         selected_range = None
 
+    suits = ["c", "d", "h", "s"]
+
     for hand in hands:
         try:
+            # カード構築
             if len(hand) == 2:
                 rank1, rank2 = hand
-                suit1, suit2 = "s", "h"
+                suit1 = random.choice(suits)
+                suit2 = random.choice([s for s in suits if s != suit1]) if rank1 == rank2 else random.choice(suits)
             elif len(hand) == 3:
                 rank1, rank2, suited_flag = hand
                 suit1 = "s"
@@ -30,7 +34,10 @@ def run_group_calculation(group_name, num_simulations, range_mode, six_player_mo
             card1 = rank1 + suit1
             card2 = rank2 + suit2
 
-            # 6人テーブルの他プレイヤー除外
+            if card1 == card2:
+                continue  # 同一カードを避ける
+
+            # 6人テーブルの他プレイヤー除外処理
             extra_excluded = None
             if six_player_mode:
                 full_deck = [r + s for r in "23456789TJQKA" for s in "cdhs"]
