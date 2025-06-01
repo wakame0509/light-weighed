@@ -8,16 +8,16 @@ def run_group_calculation(group_name, num_simulations, range_mode, six_player_mo
 
     for hand in hands:
         try:
-            # 例: hand = "AKs" や "QJo" のような文字列を想定
-            if len(hand) == 3:
-                rank1, rank2, suited_flag = hand[0], hand[1], hand[2]
+            # hand = ["A", "K", "s"] または ["Q", "Q"]
+            if len(hand) == 2:
+                rank1, rank2 = hand
+                suit1, suit2 = "s", "h"  # 適当なスートで構成
+            elif len(hand) == 3:
+                rank1, rank2, suited_flag = hand
                 suit1 = "s"
                 suit2 = "s" if suited_flag == "s" else "h"
-            elif len(hand) == 2:
-                rank1, rank2 = hand[0], hand[1]
-                suit1, suit2 = "s", "h"
             else:
-                raise ValueError(f"形式不明のハンド: {hand}")
+                continue  # 不正な形式はスキップ
 
             card1 = rank1 + suit1
             card2 = rank2 + suit2
@@ -30,6 +30,7 @@ def run_group_calculation(group_name, num_simulations, range_mode, six_player_mo
                 extra_excluded=None if not six_player_mode else "simulate_others",
                 num_simulations=num_simulations
             )
+
             result["Hand"] = card1 + card2
             result["Group"] = group_name
             results.append(result)
