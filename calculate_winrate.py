@@ -28,33 +28,39 @@ def run_winrate_evolution(p1_card1, p1_card2, board, selected_range=None,
         sim_deck = deck.copy()
         random.shuffle(sim_deck)
 
-        opp_hand = [sim_deck.pop(), sim_deck.pop()] if not selected_range else random.choice(selected_range)
+        # 相手のハンドをセット
+        opp_hand = random.choice(selected_range) if selected_range else [sim_deck.pop(), sim_deck.pop()]
 
         try:
-            flop_board = board + [sim_deck.pop() for _ in range(5 - len(board))]
+            # フロップ（3枚）
+            flop = board + [sim_deck.pop() for _ in range(3 - len(board))]
+            p1_flop = [eval7.Card(p1_card1), eval7.Card(p1_card2)] + [eval7.Card(c) for c in flop]
+            p2_flop = [eval7.Card(c) for c in opp_hand] + [eval7.Card(c) for c in flop]
+            s1f, s2f = evaluate_hand(p1_flop), evaluate_hand(p2_flop)
+            if s1f > s2f:
+                flop_wins += 1
+            elif s1f == s2f:
+                flop_ties += 1
 
-            p1_flop = [eval7.Card(p1_card1), eval7.Card(p1_card2)] + [eval7.Card(c) for c in flop_board]
-            p2_flop = [eval7.Card(c) for c in opp_hand] + [eval7.Card(c) for c in flop_board]
-            s1_flop, s2_flop = evaluate_hand(p1_flop), evaluate_hand(p2_flop)
+            # ターン（4枚目）
+            turn = flop + [sim_deck.pop()]
+            p1_turn = [eval7.Card(p1_card1), eval7.Card(p1_card2)] + [eval7.Card(c) for c in turn]
+            p2_turn = [eval7.Card(c) for c in opp_hand] + [eval7.Card(c) for c in turn]
+            s1t, s2t = evaluate_hand(p1_turn), evaluate_hand(p2_turn)
+            if s1t > s2t:
+                turn_wins += 1
+            elif s1t == s2t:
+                turn_ties += 1
 
-            flop_wins += s1_flop > s2_flop
-            flop_ties += s1_flop == s2_flop
-
-            turn_board = flop_board[:4] + [sim_deck.pop()]
-            p1_turn = [eval7.Card(p1_card1), eval7.Card(p1_card2)] + [eval7.Card(c) for c in turn_board]
-            p2_turn = [eval7.Card(c) for c in opp_hand] + [eval7.Card(c) for c in turn_board]
-            s1_turn, s2_turn = evaluate_hand(p1_turn), evaluate_hand(p2_turn)
-
-            turn_wins += s1_turn > s2_turn
-            turn_ties += s1_turn == s2_turn
-
-            river_board = turn_board[:5] + [sim_deck.pop()]
-            p1_river = [eval7.Card(p1_card1), eval7.Card(p1_card2)] + [eval7.Card(c) for c in river_board]
-            p2_river = [eval7.Card(c) for c in opp_hand] + [eval7.Card(c) for c in river_board]
-            s1_river, s2_river = evaluate_hand(p1_river), evaluate_hand(p2_river)
-
-            river_wins += s1_river > s2_river
-            river_ties += s1_river == s2_river
+            # リバー（5枚目）
+            river = turn + [sim_deck.pop()]
+            p1_river = [eval7.Card(p1_card1), eval7.Card(p1_card2)] + [eval7.Card(c) for c in river]
+            p2_river = [eval7.Card(c) for c in opp_hand] + [eval7.Card(c) for c in river]
+            s1r, s2r = evaluate_hand(p1_river), evaluate_hand(p2_river)
+            if s1r > s2r:
+                river_wins += 1
+            elif s1r == s2r:
+                river_ties += 1
 
         except Exception:
             continue
