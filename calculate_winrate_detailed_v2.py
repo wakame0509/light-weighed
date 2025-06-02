@@ -1,4 +1,3 @@
-# calculate_winrate_detailed_v2.py
 import eval7
 import random
 
@@ -13,84 +12,132 @@ def generate_deck():
 def remove_known_cards(deck, known_cards):
     return [card for card in deck if card not in known_cards]
 
-def run_winrate_vs_flops(p1_card1, p1_card2, flop_list, selected_range=None,
-                         extra_excluded=None, num_simulations=1000):
-    results = []
-
+def run_winrate_evolution(p1_card1, p1_card2, board, selected_range=None,
+                          extra_excluded=None, num_simulations=10000,
+                          return_features=False):
+    known = [p1_card1, p1_card2] + board
     full_deck = generate_deck()
-    known = [p1_card1, p1_card2]
-    if extra_excluded:
-        known += extra_excluded
     deck = remove_known_cards(full_deck, known)
 
-    for flop in flop_list:
-        flop = list(flop)
-        flop_wins = flop_ties = 0
-        turn_wins = turn_ties = 0
-        river_wins = river_ties = 0
+    if extra_excluded:
+        deck = remove_known_cards(deck, extra_excluded)
 
-        for _ in range(num_simulations):
-            sim_deck = remove_known_cards(deck, flop).copy()
-            random.shuffle(sim_deck)
+    flop_wins = turn_wins = river_wins = 0
+    flop_ties = turn_ties = river_ties = 0
 
-            if selected_range:
-                opp_hand = random.choice(selected_range)
-                if len(opp_hand) == 2:
-                    o_card1 = opp_hand[0]
-                    o_card2 = opp_hand[1]
-                else:
-                    rank1, rank2, suited = opp_hand
-                    suit1 = 's'
-                    suit2 = 's' if suited == 's' else 'h'
-                    o_card1 = rank1 + suit1
-                    o_card2 = rank2 + suit2
+    feature_flags = []
+
+    for _ in range(num_simulations):
+        sim_deck = deck.copy()
+        random.shuffle(sim_deck)
+
+        # 相手ハンド決定
+        if selected_range:
+            raw = random.choice(selected_range)
+            if len(raw) == 2:
+                r1, r2 = raw
+                c1 = r1 + 'c'
+                c2 = r2 + 'd'
             else:
-                o_card1 = sim_deck.pop()
-                o_card2 = sim_deck.pop()
+                r1, r2, suited = raw
+                if suited == "s":
+                    suit = random.choice(['c', 'd', 'h', 's'])
+                    c1 = r1 + suit
+                    c2 = r2 + suit
+                else:
+                    suits_combo = random.sample(['c', 'd', 'h', 's'], 2)
+                    c1 = r1 + suits_combo[0]
+                    c2 = r2 + suits_combo[1]
+            opp_hand = [c1, c2]
+        else:
+            opp_hand = [sim_deck.pop(), sim_deck.pop()]
 
-            try:
-                p1_flop = [eval7.Card(p1_card1), eval7.Card(p1_card2)] + [eval7.Card(c) for c in flop]
-                p2_flop = [eval7.Card(o_card1), eval7.Card(o_card2)] + [eval7.Card(c) for c in flop]
-                s1f, s2f = evaluate_hand(p1_flop), evaluate_hand(p2_flop)
-                if s1f > s2f:
-                    flop_wins += 1
-                elif s1f == s2f:
-                    flop_ties += 1
+        try:
+            # フロップ
+            flop = board + [sim_deck.pop() for _ in range(3 - len(board))]
+            p1_flop = [eval7.Card(p1_card1), eval7.Card(p1_card2)] + [eval7.Card(c) for c in flop]
+            p2_flop = [eval7.Card(c) for c in opp_hand] + [eval7.Card(c) for c in flop]
+            s1f, s2f = evaluate_hand(p1_flop), evaluate_hand(p2_flop)
+            if s1f > s2f:
+                flop_wins += 1
+            elif s1f == s2f:
+                flop_ties += 1
 
-                turn = flop + [sim_deck.pop()]
-                p1_turn = [eval7.Card(p1_card1), eval7.Card(p1_card2)] + [eval7.Card(c) for c in turn]
-                p2_turn = [eval7.Card(o_card1), eval7.Card(o_card2)] + [eval7.Card(c) for c in turn]
-                s1t, s2t = evaluate_hand(p1_turn), evaluate_hand(p2_turn)
-                if s1t > s2t:
-                    turn_wins += 1
-                elif s1t == s2t:
-                    turn_ties += 1
+            # ターン
+            turn = flop + [sim_deck.pop()]
+            p1_turn = [eval7.Card(p1_card1), eval7.Card(p1_card2)] + [eval7.Card(c) for c in turn]
+            p2_turn = [eval7.Card(c) for c in opp_hand] + [eval7.Card(c) for c in turn]
+            s1t, s2t = evaluate_hand(p1_turn), evaluate_hand(p2_turn)
+            if s1t > s2t:
+                turn_wins += 1
+            elif s1t == s2t:
+                turn_ties += 1
 
-                river = turn + [sim_deck.pop()]
-                p1_river = [eval7.Card(p1_card1), eval7.Card(p1_card2)] + [eval7.Card(c) for c in river]
-                p2_river = [eval7.Card(o_card1), eval7.Card(o_card2)] + [eval7.Card(c) for c in river]
-                s1r, s2r = evaluate_hand(p1_river), evaluate_hand(p2_river)
-                if s1r > s2r:
-                    river_wins += 1
-                elif s1r == s2r:
-                    river_ties += 1
+            # リバー
+            river = turn + [sim_deck.pop()]
+            p1_river = [eval7.Card(p1_card1), eval7.Card(p1_card2)] + [eval7.Card(c) for c in river]
+            p2_river = [eval7.Card(c) for c in opp_hand] + [eval7.Card(c) for c in river]
+            s1r, s2r = evaluate_hand(p1_river), evaluate_hand(p2_river)
+            if s1r > s2r:
+                river_wins += 1
+            elif s1r == s2r:
+                river_ties += 1
 
-            except Exception:
-                continue
+            # 特徴量（フロップ）
+            if return_features:
+                flop_ranks = [card[0] for card in flop]
+                flop_suits = [card[1] for card in flop]
+                paired = len(set(flop_ranks)) < 3
+                monotone = len(set(flop_suits)) == 1
+                connected = is_connected(flop_ranks)
 
-        flop_wr = (flop_wins + flop_ties / 2) / num_simulations * 100
-        turn_wr = (turn_wins + turn_ties / 2) / num_simulations * 100
-        river_wr = (river_wins + river_ties / 2) / num_simulations * 100
+                # Overcard
+                rank_order = "23456789TJQKA"
+                hole_ranks = sorted([p1_card1[0], p1_card2[0]], key=lambda x: rank_order.index(x))
+                highest_hole = rank_order.index(hole_ranks[-1])
+                overcard = any(rank_order.index(fr) > highest_hole for fr in flop_ranks if fr in rank_order)
 
-        results.append({
-            "Hand": p1_card1 + p1_card2,
-            "Flop": flop,
-            "FlopWinrate": flop_wr,
-            "TurnWinrate": turn_wr,
-            "RiverWinrate": river_wr,
-            "ShiftFlop": flop_wr,
-            "ShiftTurn": turn_wr - flop_wr,
-            "ShiftRiver": river_wr - turn_wr
-        })
+                if paired:
+                    feature = "PairedFlop"
+                elif monotone:
+                    feature = "MonotoneFlop"
+                elif connected:
+                    feature = "StraightDrawFlop"
+                elif overcard:
+                    feature = "OvercardOnFlop"
+                else:
+                    feature = "NormalFlop"
 
-    return results
+                shift = (s1r > s2r) - (s1r < s2r)
+                feature_flags.append({
+                    "Feature": feature,
+                    "Shift": shift
+                })
+
+        except Exception:
+            continue
+
+    flop_winrate = (flop_wins + flop_ties / 2) / num_simulations * 100
+    turn_winrate = (turn_wins + turn_ties / 2) / num_simulations * 100
+    river_winrate = (river_wins + river_ties / 2) / num_simulations * 100
+
+    result = {
+        "Preflop": 0.0,
+        "FlopWinrate": flop_winrate,
+        "TurnWinrate": turn_winrate,
+        "RiverWinrate": river_winrate,
+        "ShiftFlop": flop_winrate,
+        "ShiftTurn": turn_winrate - flop_winrate,
+        "ShiftRiver": river_winrate - turn_winrate
+    }
+
+    if return_features:
+        return result, feature_flags
+    else:
+        return result
+
+def is_connected(ranks):
+    """ランクがストレートっぽいか判定（例: 9, T, J）"""
+    rank_order = "23456789TJQKA"
+    values = sorted([rank_order.index(r) for r in ranks if r in rank_order])
+    return len(values) == 3 and max(values) - min(values) <= 4
