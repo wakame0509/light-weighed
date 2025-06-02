@@ -31,7 +31,7 @@ def run_winrate_evolution(p1_card1, p1_card2, board, selected_range=None,
         sim_deck = deck.copy()
         random.shuffle(sim_deck)
 
-        # 相手ハンドを決定
+        # 相手ハンド決定
         if selected_range:
             raw = random.choice(selected_range)
             if len(raw) == 2:
@@ -53,7 +53,7 @@ def run_winrate_evolution(p1_card1, p1_card2, board, selected_range=None,
             opp_hand = [sim_deck.pop(), sim_deck.pop()]
 
         try:
-            # フロップ（3枚）
+            # フロップ
             flop = board + [sim_deck.pop() for _ in range(3 - len(board))]
             p1_flop = [eval7.Card(p1_card1), eval7.Card(p1_card2)] + [eval7.Card(c) for c in flop]
             p2_flop = [eval7.Card(c) for c in opp_hand] + [eval7.Card(c) for c in flop]
@@ -63,7 +63,7 @@ def run_winrate_evolution(p1_card1, p1_card2, board, selected_range=None,
             elif s1f == s2f:
                 flop_ties += 1
 
-            # ターン（4枚目）
+            # ターン
             turn = flop + [sim_deck.pop()]
             p1_turn = [eval7.Card(p1_card1), eval7.Card(p1_card2)] + [eval7.Card(c) for c in turn]
             p2_turn = [eval7.Card(c) for c in opp_hand] + [eval7.Card(c) for c in turn]
@@ -73,7 +73,7 @@ def run_winrate_evolution(p1_card1, p1_card2, board, selected_range=None,
             elif s1t == s2t:
                 turn_ties += 1
 
-            # リバー（5枚目）
+            # リバー
             river = turn + [sim_deck.pop()]
             p1_river = [eval7.Card(p1_card1), eval7.Card(p1_card2)] + [eval7.Card(c) for c in river]
             p2_river = [eval7.Card(c) for c in opp_hand] + [eval7.Card(c) for c in river]
@@ -83,15 +83,35 @@ def run_winrate_evolution(p1_card1, p1_card2, board, selected_range=None,
             elif s1r == s2r:
                 river_ties += 1
 
+            # 特徴量
             if return_features:
-                # 特徴量フラグ（例: paired flop）
                 flop_ranks = [card[0] for card in flop]
                 flop_suits = [card[1] for card in flop]
                 paired = len(set(flop_ranks)) < 3
                 monotone = len(set(flop_suits)) == 1
+                connected = is_connected(flop_ranks)
+
+                # Overcard
+                rank_order = "23456789TJQKA"
+                hole_ranks = sorted([p1_card1[0], p1_card2[0]], key=lambda x: rank_order.index(x))
+                highest_hole = rank_order.index(hole_ranks[-1])
+                overcard = any(rank_order.index(fr) > highest_hole for fr in flop_ranks if fr in rank_order)
+
+                if paired:
+                    feature = "PairedFlop"
+                elif monotone:
+                    feature = "MonotoneFlop"
+                elif connected:
+                    feature = "StraightDrawFlop"
+                elif overcard:
+                    feature = "OvercardOnFlop"
+                else:
+                    feature = "NormalFlop"
+
+                shift = (s1r > s2r) - (s1r < s2r)
                 feature_flags.append({
-                    "Feature": "PairedFlop" if paired else ("MonotoneFlop" if monotone else "NormalFlop"),
-                    "Shift": s1r - s2r
+                    "Feature": feature,
+                    "Shift": shift
                 })
 
         except Exception:
@@ -115,3 +135,9 @@ def run_winrate_evolution(p1_card1, p1_card2, board, selected_range=None,
         return result, feature_flags
     else:
         return result
+
+def is_connected(ranks):
+    """ランクがストレートっぽいか判定（例: 9, T, J）"""
+    rank_order = "23456789TJQKA"
+    values = sorted([rank_order.index(r) for r in ranks if r in rank_order])
+    return len(values) == 3 and max(values) - min(values) <= 4
