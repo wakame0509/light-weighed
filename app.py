@@ -41,7 +41,14 @@ if st.button("✅ 勝率変動と特徴量を計算"):
     )
 
     st.success("✅ 計算完了！")
-
+from preflop_winrates import preflop_winrates
+    st.markdown("### 🎯 代表的なハンドのプリフロップ勝率（vs ランダム）")
+    with st.expander("クリックで表示"):
+        df_preflop = pd.DataFrame([
+            {"Hand": k, "Preflop Winrate (%)": v} for k, v in preflop_winrates.items()
+        ])
+        df_preflop = df_preflop.sort_values(by="Preflop Winrate (%)", ascending=False)
+        st.dataframe(df_preflop.reset_index(drop=True))
     # 勝率結果
     st.subheader("📊 勝率変動結果")
     st.dataframe(result_df.style.format({
