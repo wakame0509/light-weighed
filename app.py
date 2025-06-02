@@ -1,74 +1,68 @@
 import streamlit as st
 import pandas as pd
 from group_calculator import run_group_calculation
-from hand_group_definitions import get_all_group_names
-from utils import get_static_preflop_winrates
+from utils import get_group_hands, get_hand_range_25, get_hand_range_30
 from analyze_detailed_features import analyze_detailed_features
 
-st.set_page_config(page_title="勝率変動ツール（分担・保存対応）", layout="centered")
+st.set_page_config(layout="wide")
 
-st.title("🃏 ポーカー勝率変動ツール")
-st.markdown("### ハンドグループを選択して、勝率変動と特徴量を計算します")
+st.title("♠ テキサスホールデム 勝率変動分析ツール")
 
-# --- 入力エリア ---
-available_groups = get_all_group_names()
-selected_group = st.selectbox("🎯 対象ハンドグループを選択", available_groups)
+st.markdown("このツールでは、プリフロップからリバーまでの勝率変動や影響する特徴量を分析できます。")
 
-# モンテカルロ試行回数選択
-st.markdown("### 試行回数（モンテカルロ法）")
-num_simulations = st.selectbox("シミュレーション回数", [10000, 30000, 50000], index=0)
+# --- 入力セクション ---
+group = st.selectbox("🔍 分析するハンドグループを選択", [
+    "High Pair", "Middle Pair", "Low Pair",
+    "Broadway", "Ace-High", "Suited Connectors",
+    "Offsuit Connectors", "Suited One-Gappers",
+    "Offsuit One-Gappers", "Suited Two-Gappers",
+    "Offsuit Two-Gappers", "Trash"
+])
 
-# レンジ選択
-st.markdown("### 相手ハンドレンジを選択")
-range_option = st.radio("レンジ設定", ["すべて", "25%", "30%"], index=0)
-selected_range = {"すべて": "all", "25%": "25", "30%": "30"}[range_option]
+range_mode = st.radio("🎯 相手レンジ", options=["None", "25", "30"], index=0)
+six_player = st.checkbox("6人テーブル（他4人のカード除外）", value=False)
+simulations = st.select_slider("🎲 モンテカルロ試行回数", options=[10000, 50000, 100000], value=50000)
 
-# 6人テーブル対応チェックボックス
-six_player = st.checkbox("6人テーブル対応モード（他の4人にハンドを配って除外）", value=True)
+if st.button("✅ 勝率変動を計算・分析開始"):
+    with st.spinner("計算中..."):
+        df_result, df_features = run_group_calculation(
+            group_name=group,
+            num_simulations=simulations,
+            range_mode=range_mode,
+            six_player_mode=six_player,
+            return_feature_analysis=True
+        )
 
-# --- 実行ボタン ---
-if st.button("✅ 勝率変動と特徴量を計算"):
-    st.write(f"計算中… グループ：`{selected_group}` / レンジ：`{range_option}` / 回数：`{num_simulations}`")
-    
-    result_df, feature_df = run_group_calculation(
-        group_name=selected_group,
-        num_simulations=num_simulations,
-        range_mode=selected_range,
-        six_player_mode=six_player,
-        return_feature_analysis=True
-    )
+        st.markdown("### 🧮 勝率変動（ハンド別）")
+        st.dataframe(df_result)
 
-    st.success("✅ 勝率変動と特徴量の計算が完了しました")
+        st.markdown("### 🔬 特徴量別の平均勝率変動")
+        st.dataframe(df_features)
 
-    # 勝率変動表示
-    st.markdown("### 📊 勝率変動結果")
-    st.dataframe(result_df.style.format({
-        "FlopWinrate": "{:.2f}%",
-        "TurnWinrate": "{:.2f}%",
-        "RiverWinrate": "{:.2f}%",
-        "ShiftFlop": "{:+.2f}%",
-        "ShiftTurn": "{:+.2f}%",
-        "ShiftRiver": "{:+.2f}%"
-    }))
+# --- プリフロップ勝率表（静的） ---
+from utils import get_static_preflop_winrates
 
-    # 特徴量集計表示
-    st.markdown("### 🧠 特徴量別 勝率変動分析")
-    st.dataframe(feature_df.style.format({
-        "AvgShift": "{:+.2f}%",
-        "Count": "{:.0f}"
-    }))
+st.markdown("### 📊 代表的なハンドのプリフロップ勝率（vs ランダム）")
+preflop_df = pd.DataFrame(get_static_preflop_winrates())
+st.dataframe(preflop_df)
 
-    # CSV保存ボタン
-    csv = result_df.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        label="📥 勝率変動データをCSVでダウンロード",
-        data=csv,
-        file_name=f"{selected_group}_winrate_shift.csv",
-        mime="text/csv"
-    )
+# --- フロップ勝率変動ランキング（事前に保存されたCSVを使用） ---
+st.markdown("### 🏆 フロップ勝率変動ランキング")
 
-# --- プリフロップ勝率の静的表示 ---
-st.markdown("### 🎯 代表的なハンドのプリフロップ勝率（vs ランダム）")
-preflop_dict = get_static_preflop_winrates()
-preflop_df = pd.DataFrame(preflop_dict.items(), columns=["Hand", "Winrate"])
-st.dataframe(preflop_df.style.format({"Winrate": "{:.2f}%"}))
+try:
+    df = pd.read_csv("results/detailed_shifts.csv")
+except FileNotFoundError:
+    st.warning("⚠️ 分析結果ファイル（results/detailed_shifts.csv）が見つかりません。")
+    df = pd.DataFrame()
+
+if not df.empty:
+    top_increase = df.sort_values(by="ShiftFlop", ascending=False).head(10)
+    top_decrease = df.sort_values(by="ShiftFlop", ascending=True).head(10)
+
+    st.markdown("#### 📈 勝率上昇トップ10")
+    st.dataframe(top_increase[["Hand", "ShiftFlop", "Feature"]])
+
+    st.markdown("#### 📉 勝率下降トップ10")
+    st.dataframe(top_decrease[["Hand", "ShiftFlop", "Feature"]])
+else:
+    st.info("結果データがまだ生成されていないか、ファイルが読み込まれていません。")
