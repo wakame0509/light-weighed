@@ -1,65 +1,109 @@
 import streamlit as st
 import pandas as pd
-from utils import get_all_group_names, get_static_preflop_winrates
-from group_calculator import run_group_calculation
+from utils import (
+    get_hand_group_dict, get_group_hands,
+    get_hand_range_25, get_hand_range_30,
+    get_static_preflop_winrates
+)
+from flop_samples import representative_flops
+from calculate_winrate_detailed_v2 import run_winrate_evolution
 
-st.set_page_config(page_title="📊 勝率変動ランキング", layout="centered")
-
-st.title("📊 テキサスホールデム 勝率変動ランキング")
+st.set_page_config(layout="wide")
+st.title("♠️ テキサスホールデム 勝率変動ランキング（自動計算）")
 
 st.markdown("""
-このアプリでは、各ハンドに対して **どのようなフロップ・ターン・リバーの特徴** が
-勝率にどう影響するかを表示します。勝率が大きく上昇・下降した要因の特徴量も横に表示されます。
+このアプリでは、指定した **ハンドグループ** に対して代表的な100フロップを使って勝率変動を自動計算します。  
+相手のハンドレンジも指定可能で、**Flop/Turn/Riverの変動幅のランキング**とその要因となる**特徴量**を表示します。
 """)
 
-# --- サイドバー UI ---
-st.sidebar.header("設定")
-group_name = st.sidebar.selectbox("🎯 対象ハンドグループを選択", get_all_group_names())
-num_simulations = st.sidebar.selectbox("シミュレーション回数", [10000, 30000, 50000], index=0)
-range_option = st.sidebar.radio("相手ハンドレンジ", ["すべて", "25%", "30%"], index=0)
-range_mode = {"すべて": "all", "25%": "25", "30%": "30"}[range_option]
-six_player_mode = st.sidebar.checkbox("6人テーブル対応（他4人を除外）", value=True)
+# --- 入力UI ---
+group_names = list(get_hand_group_dict().keys())
+selected_group = st.selectbox("📂 対象ハンドグループを選択", group_names)
 
-# --- 計算ボタン ---
-if st.button("✅ 勝率変動を計算"):
-    st.write(f"計算中... グループ: `{group_name}`, レンジ: `{range_option}`, 回数: `{num_simulations}`")
-    df_result, df_feature = run_group_calculation(
-        group_name=group_name,
-        num_simulations=num_simulations,
-        range_mode=range_mode,
-        six_player_mode=six_player_mode,
-        return_feature_analysis=True
-    )
-    st.success("✅ 計算完了！")
+range_option = st.selectbox("🎯 相手のハンドレンジを選択", ["ランダム", "上位25%", "上位30%"])
+if range_option == "上位25%":
+    selected_range = get_hand_range_25()
+elif range_option == "上位30%":
+    selected_range = get_hand_range_30()
+else:
+    selected_range = None
 
-    # --- 勝率変動ランキング表示 ---
-    def show_shift_ranking(stage):
-        st.markdown(f"### 💡 {stage} 勝率変動ランキング")
-        if "Feature" in df_result.columns:
-            merged = df_result
-        elif "Feature" in df_feature.columns:
-            merged = df_result.merge(df_feature[["Hand", "Feature"]], on="Hand", how="left")
-        else:
-            merged = df_result.copy()
-            merged["Feature"] = "N/A"
+num_simulations = st.selectbox("🔁 シミュレーション回数（1ハンド×1フロップあたり）", [1000, 5000, 10000], index=1)
 
-        top10 = merged.sort_values(by=f"Shift{stage}", ascending=False).head(10)
-        bottom10 = merged.sort_values(by=f"Shift{stage}", ascending=True).head(10)
+if st.button("🚀 勝率変動を計算"):
+    st.markdown("🧮 計算中...少々お待ちください")
+    hands = get_group_hands(selected_group)
+    all_results = []
 
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("#### 🔼 上昇幅 Top10")
-            st.dataframe(top10[["Hand", f"Shift{stage}", "Feature"]].reset_index(drop=True))
-        with col2:
-            st.markdown("#### 🔽 下降幅 Top10")
-            st.dataframe(bottom10[["Hand", f"Shift{stage}", "Feature"]].reset_index(drop=True))
+    for hand in hands:
+        card1 = hand[0] + 's'
+        card2 = hand[1] + 'h' if len(hand) == 2 else hand[1] + ('s' if hand[2] == "o" else 'd')
+        shorthand = "".join(hand) if len(hand) == 2 else hand[0] + hand[1] + hand[2]
 
-    show_shift_ranking("Flop")
-    show_shift_ranking("Turn")
-    show_shift_ranking("River")
+        total_flop_shift = turn_shift = river_shift = 0
+        features_counter = {}
+        count = 0
 
-# --- プリフロップ勝率表 ---
-st.markdown("### 🎯 代表的なハンドのプリフロップ勝率（vs ランダム）")
-preflop_df = pd.DataFrame(get_static_preflop_winrates().items(), columns=["Hand", "Winrate"])
-preflop_df = preflop_df.sort_values(by="Winrate", ascending=False).reset_index(drop=True)
-st.dataframe(preflop_df)
+        for flop in representative_flops:
+            board = flop[:]
+            try:
+                result, feature_flags = run_winrate_evolution(
+                    card1, card2, board=board,
+                    selected_range=selected_range,
+                    num_simulations=num_simulations,
+                    return_features=True
+                )
+                total_flop_shift += result["ShiftFlop"]
+                turn_shift += result["ShiftTurn"]
+                river_shift += result["ShiftRiver"]
+                count += 1
+
+                for f in feature_flags:
+                    key = f["Feature"]
+                    features_counter[key] = features_counter.get(key, 0) + f["Shift"]
+            except Exception:
+                continue
+
+        if count == 0:
+            continue
+
+        most_common_feature = max(features_counter.items(), key=lambda x: abs(x[1]))[0] if features_counter else "N/A"
+
+        all_results.append({
+            "Hand": shorthand,
+            "ShiftFlop": round(total_flop_shift / count, 2),
+            "ShiftTurn": round(turn_shift / count, 2),
+            "ShiftRiver": round(river_shift / count, 2),
+            "Feature": most_common_feature
+        })
+
+    if not all_results:
+        st.error("計算に失敗しました。カードの重複やデッキ不足が原因かもしれません。")
+    else:
+        df = pd.DataFrame(all_results)
+
+        def show_shift_ranking(stage):
+            st.markdown(f"### 💡 {stage} 勝率変動ランキング")
+
+            top10 = df.sort_values(by=f"Shift{stage}", ascending=False).head(10)
+            bottom10 = df.sort_values(by=f"Shift{stage}", ascending=True).head(10)
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("#### 🔼 上昇幅 Top10")
+                st.dataframe(top10[["Hand", f"Shift{stage}", "Feature"]].reset_index(drop=True))
+
+            with col2:
+                st.markdown("#### 🔽 下降幅 Top10")
+                st.dataframe(bottom10[["Hand", f"Shift{stage}", "Feature"]].reset_index(drop=True))
+
+        show_shift_ranking("Flop")
+        show_shift_ranking("Turn")
+        show_shift_ranking("River")
+
+        # プリフロップ参考表示
+        st.markdown("### 🎯 代表的なハンドのプリフロップ勝率（vs ランダム）")
+        preflop_df = pd.DataFrame(get_static_preflop_winrates().items(), columns=["Hand", "Winrate"])
+        preflop_df = preflop_df.sort_values(by="Winrate", ascending=False).reset_index(drop=True)
+        st.dataframe(preflop_df)
