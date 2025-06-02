@@ -1,0 +1,13 @@
+Hand,ShiftFlop,ShiftTurn,ShiftRiver,Feature
+AKs,4.2,1.5,-0.3,OvercardOnFlop
+QJo,-2.1,-0.7,-1.0,PairedFlop
+99,3.8,1.2,0.5,PairedFlop
+JTs,5.5,1.9,-0.1,StraightDrawFlop
+55,-4.3,-1.0,-1.2,OvercardOnFlop
+AQo,2.5,0.9,-0.4,MonotoneFlop
+KQs,1.1,0.7,0.3,NormalFlop
+44,-5.2,-1.5,-0.7,OvercardOnFlop
+87s,3.3,1.1,-0.6,ConnectedFlop
+T9s,4.7,2.0,-0.2,StraightDrawFlop
+66,-3.9,-1.3,-0.5,OvercardOnFlop
+AJo,2.9,1.4,0.1,NormalFlop
