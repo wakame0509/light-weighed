@@ -34,15 +34,17 @@ six_player = st.checkbox("6人テーブル対応モード（他の4人にハン�
 # --- 実行ボタン ---
 if st.button("✅ 勝率変動を計算"):
     st.write(f"計算中… グループ：`{selected_group}` / レンジ：`{range_option}` / 回数：`{num_simulations}`")
-    result_df = run_group_calculation(
+    result_df, feature_df = run_group_calculation(
         group_name=selected_group,
         num_simulations=num_simulations,
         range_mode=selected_range,
-        six_player_mode=six_player
+        six_player_mode=six_player,
+        return_feature_analysis=True  # ←これが重要！
     )
 
-    # 結果表示
+    # 勝率結果表示
     st.success("✅ 計算完了！")
+    st.markdown("### 💹 勝率変動（各ハンドごと）")
     st.dataframe(result_df.style.format({
         "FlopWinrate": "{:.2f}%",
         "TurnWinrate": "{:.2f}%",
@@ -50,6 +52,13 @@ if st.button("✅ 勝率変動を計算"):
         "ShiftFlop": "{:+.2f}%",
         "ShiftTurn": "{:+.2f}%",
         "ShiftRiver": "{:+.2f}%"
+    }))
+
+    # 特徴量表示
+    st.markdown("### 🧠 特徴量ごとの平均勝率変動")
+    st.dataframe(feature_df.style.format({
+        "AvgShift": "{:+.2f}%",
+        "Count": "{:.0f}"
     }))
 
     # CSV保存
@@ -61,11 +70,7 @@ if st.button("✅ 勝率変動を計算"):
         mime="text/csv"
     )
 
-# --- プリフロップ勝率一覧表示 ---
-st.markdown("### 🎯 代表的なハンドのプリフロップ勝率（vs ランダム）")
-winrate_dict = get_static_preflop_winrates()
-preflop_df = pd.DataFrame([
-    {"Hand": hand, "Winrate_vs_Random(%)": winrate}
-    for hand, winrate in winrate_dict.items()
-])
-st.dataframe(preflop_df.sort_values("Winrate_vs_Random(%)", ascending=False).reset_index(drop=True))
+# --- プリフロップ参考情報（静的表示） ---
+st.markdown("### 📊 代表的なハンドのプリフロップ勝率（vs ランダム）")
+preflop_df = pd.DataFrame(get_static_preflop_winrates())
+st.dataframe(preflop_df)
