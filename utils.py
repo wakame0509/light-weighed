@@ -9,8 +9,7 @@ def generate_deck():
 def remove_known_cards(deck, known_cards):
     return [card for card in deck if card not in known_cards]
 
-
-# --- ハンドグループ ---
+# --- ハンドグループ定義 ---
 hand_groups = {
     "High Pair": [["A", "A"], ["K", "K"], ["Q", "Q"]],
     "Mid Pair": [["J", "J"], ["T", "T"], ["9", "9"]],
@@ -40,8 +39,7 @@ def get_group_hands(group_name):
 def get_all_group_names():
     return list(hand_groups.keys())
 
-
-# --- レンジ指定（上位25%・30%） ---
+# --- レンジ指定 ---
 def get_hand_range_25():
     return [
         ["A", "A"], ["K", "K"], ["Q", "Q"], ["J", "J"], ["T", "T"],
@@ -58,8 +56,7 @@ def get_hand_range_30():
         ["A", "T", "o"], ["K", "J", "o"], ["Q", "J", "o"]
     ]
 
-
-# --- プリフロップ勝率（169通りすべて） ---
+# --- プリフロップ勝率（169通り） ---
 def get_static_preflop_winrates():
     return {
         'AA': 85.0, 'KK': 82.1, 'QQ': 79.5, 'JJ': 77.0, 'TT': 75.0, '99': 72.0, '88': 69.0, '77': 66.5,
